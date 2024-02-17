@@ -13,12 +13,13 @@ import java.io.InputStream;
 class MainTest {
     public static void main(String[] args) throws IOException {
         ObjectMapper objectMapper = new ObjectMapper()
-                .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+                .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
         objectMapper.registerModule(new LazyModule(objectMapper));
 
         LazyJson lazyJson = new LazyJson(objectMapper);
         String content = readLazyFile();
         DataObject dataObject = lazyJson.readValue(content, DataObject.class);
+        System.out.println("parsed to object");
         System.out.println(objectMapper.writeValueAsString(dataObject));
     }
 

@@ -8,8 +8,8 @@ import com.fasterxml.jackson.databind.deser.std.StdDeserializer;
 import com.fasterxml.jackson.databind.jsontype.TypeDeserializer;
 import com.fasterxml.jackson.databind.type.LogicalType;
 import com.fasterxml.jackson.databind.util.AccessPattern;
+import com.fasterxml.jackson.databind.util.TokenBuffer;
 import org.gokul.lazyjackson.Lazy;
-import org.gokul.lazyjackson.reader.LazyJsonParserDelegate;
 
 import java.io.IOException;
 
@@ -73,11 +73,6 @@ public class LazyDeserializer
     }
 
     @Override
-    public AccessPattern getEmptyAccessPattern() {
-        return AccessPattern.DYNAMIC;
-    }
-
-    @Override
     public JavaType getValueType() {
         return _fullType;
     }
@@ -90,11 +85,6 @@ public class LazyDeserializer
         return super.logicalType();
     }
 
-    /**
-     * By default we assume that updateability mostly relies on value
-     * deserializer; if it supports updates, typically that's what
-     * matters. So let's just delegate.
-     */
     @Override // since 2.9
     public Boolean supportsUpdate(DeserializationConfig config) {
         return (_valueDeserializer == null) ? null
@@ -109,22 +99,27 @@ public class LazyDeserializer
 
     @Override
     public Lazy<?> deserialize(JsonParser p, DeserializationContext ctxt) throws IOException {
-        LazyJsonParserDelegate lazyParser = (LazyJsonParserDelegate) p;
-        String structure = lazyParser.getCurrentStructure();
-        return referenceValue(structure);
+
+        if (p.getCurrentToken() != JsonToken.START_OBJECT
+                && p.getCurrentToken() != JsonToken.START_ARRAY) {
+            System.out.println("Not efficient! lazy is used for primitive params: " + p.getParsingContext().getCurrentName());
+        }
+        return referenceValue(ctxt.bufferAsCopyOfValue(p));
     }
 
     @Override
     public Lazy<?> deserialize(JsonParser p, DeserializationContext ctxt, Lazy<?> reference) throws IOException {
-        return referenceValue(((LazyJsonParserDelegate) p).getCurrentStructure());
+        if (p.getCurrentToken() != JsonToken.START_OBJECT
+                && p.getCurrentToken() != JsonToken.START_ARRAY) {
+            System.out.println("Not efficient! lazy is used for primitive params: " + p.getParsingContext().getCurrentName());
+        }
+        TokenBuffer tb = ctxt.bufferAsCopyOfValue(p);
+        return reference == null ? referenceValue(tb) : reference.update(tb);
     }
 
     @Override
     public Object deserializeWithType(JsonParser p, DeserializationContext ctxt,
                                       TypeDeserializer typeDeserializer) throws IOException {
-        if (p.hasToken(JsonToken.VALUE_NULL)) { // can this actually happen?
-            return getNullValue(ctxt);
-        }
         return deserialize(p, ctxt);
     }
 
@@ -134,32 +129,10 @@ public class LazyDeserializer
 
     @Override
     public Lazy<?> getNullValue(DeserializationContext ctxt) throws JsonMappingException {
-        // 07-May-2019, tatu: [databind#2303], needed for nested ReferenceTypes
-        Object nullValue = _valueDeserializer.getNullValue(ctxt);
-        if (nullValue == null) {
-            return new Lazy<>(null, null, null);
-        }
-        return referenceValue(nullValue.toString());
+        return Lazy.ofNullable(_valueDeserializer.getNullValue(ctxt));
     }
 
-    @Override
-    public Object getEmptyValue(DeserializationContext ctxt) throws JsonMappingException {
-        // 07-May-2019, tatu: I _think_ this needs to align with "null value" and
-        //    not necessarily with empty value of contents? (used to just do "absent"
-        //    so either way this seems to me like an improvement)
-        return getNullValue(ctxt);
-    }
-
-    /**
-     * As of Jackson 2.14 we will either return either same as
-     * {@link #getNullValue} or {@code null}: see
-     * {@like Jdk8Module#configureReadAbsentLikeNull(boolean)} for
-     * details.
-     */
-    public Object getAbsentValue(DeserializationContext ctxt) throws JsonMappingException {
-        return getNullValue(ctxt);
-    }
-    public Lazy<?> referenceValue(String contents) {
+    public Lazy<?> referenceValue(TokenBuffer contents) {
         return new Lazy<>(contents, _fullType.getReferencedType(), objectMapper);
     }
 }

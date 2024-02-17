@@ -25,7 +25,8 @@ dependencies {
     implementation("com.fasterxml.jackson.datatype:jackson-datatype-jdk8:2.16.1")
 
 
-    testImplementation("commons-io:commons-io:2.6")
+    testImplementation("commons-io:commons-io:2.15.1")
+    testImplementation("com.squareup.okio:okio:3.8.0")
 
 }
 
